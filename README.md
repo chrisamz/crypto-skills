@@ -38,6 +38,10 @@ Then just ask, for example: "here's my bot's trade log, is the edge real?"
 
 To use it in claude.ai, upload the `plugins/crypto-backtest-audit/skills/crypto-backtest-audit` folder as a skill (zip it first).
 
+## Privacy and support
+
+The plugin collects nothing and works offline: see [PRIVACY.md](plugins/crypto-backtest-audit/PRIVACY.md). For help or to report a problem, open an [issue](https://github.com/chrisamz/crypto-skills/issues).
+
 ## Disclaimer
 
 These are analysis tools, not investment advice. A skill that says a backtest "survives the checks" is telling you the evidence is consistent with an edge, not that you will make money. Paper-trade forward before risking capital.

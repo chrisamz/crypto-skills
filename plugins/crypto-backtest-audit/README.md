@@ -37,6 +37,19 @@ The answer is a verdict (no evidence of edge / edge not robust / plausible, need
 - It works fully offline. The only file it opens is the CSV you give it.
 - The plugin has no hooks, no MCP servers and no background processes.
 
+## Try it with sample data
+
+`examples/sample_trades.csv` is a synthetic 300-trade log (made-up wallets and tokens). Three prompts that show the core behaviour:
+
+1. "Audit examples/sample_trades.csv. Columns are wallet, token, entry_time, pnl_usd, size_usd. Is the edge real?"
+2. "A wallet on a leaderboard shows an 82% win rate over 30 days. Should I copy it? What should I check first?"
+3. "Review this backtest script before I trade it live." (attach or paste the script)
+
+## Privacy and support
+
+- Privacy policy: [PRIVACY.md](PRIVACY.md). In short, the plugin collects nothing and works offline.
+- Support and security reports: open an issue at https://github.com/chrisamz/crypto-skills/issues
+
 ## Not investment advice
 
 This is an analysis tool. A passing audit means the evidence is consistent with an edge, not that you will make money.
