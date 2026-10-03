@@ -34,7 +34,8 @@ The answer is a verdict (no evidence of edge / edge not robust / plausible, need
 
 - One Python script, `skills/crypto-backtest-audit/scripts/audit_trades.py`, which Claude runs on your machine when you give it a trade CSV.
 - The script uses only the Python standard library. It reads the CSV you point it at and prints a report; with `--json` it also writes one result file where you tell it to.
-- It makes no network requests, reads no credentials, and has no hooks, MCP servers or background processes.
+- It works fully offline. The only file it opens is the CSV you give it.
+- The plugin has no hooks, no MCP servers and no background processes.
 
 ## Not investment advice
 
