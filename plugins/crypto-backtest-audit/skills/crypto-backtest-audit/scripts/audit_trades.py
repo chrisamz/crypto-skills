@@ -15,6 +15,12 @@ Columns (names configurable):
   --time    entry time: ISO-8601, unix seconds, or any sortable number such as a slot
             (optional; enables the A/B time split)
 
+Optional extras:
+  --period N            length of one "day" in --time units (86400 for unix seconds or ISO
+                        dates, the default; e.g. 216000 for Solana slots). Enables per-day stats.
+  --daily-loss-limit X  simulate a risk rule: stop taking trades for the rest of the day once
+                        the day's PnL is <= -X. Needs --time.
+
 Prints a markdown report and a list of flags. Every number is computed from the CSV;
 nothing is estimated. Exit code is 0 even when flags fire: flags are findings, not errors.
 """
@@ -221,6 +227,128 @@ def selection_test(
     }
 
 
+def top_trades(trades: list[dict[str, Any]], k: int = 5) -> list[dict[str, Any]]:
+    out = []
+    for t in sorted(trades, key=lambda x: x["pnl"], reverse=True)[:k]:
+        ret = t["pnl"] / t["size"] if t.get("size") else None
+        out.append({"pnl": t["pnl"], "return": ret, "asset": t.get("asset"),
+                    "entity": t.get("entity"), "time": t.get("time")})
+    return out
+
+
+def sanity(trades: list[dict[str, Any]]) -> dict[str, Any]:
+    """Cheap data checks: exact duplicate rows, impossible losses, extreme winners."""
+    seen: dict[tuple[Any, ...], int] = defaultdict(int)
+    # Only meaningful when rows can be told apart: need at least two identifying columns.
+    if trades and sum(k in trades[0] for k in ("entity", "asset", "time")) >= 2:
+        for t in trades:
+            seen[(t.get("entity"), t.get("asset"), t.get("time"), t["pnl"])] += 1
+    sized = [t for t in trades if t.get("size")]
+    return {
+        "duplicate_rows": sum(c - 1 for c in seen.values() if c > 1),
+        "loss_over_105pct": sum(1 for t in sized if t["pnl"] < -1.05 * t["size"]),
+        "return_over_10000pct": sum(1 for t in sized if t["pnl"] > 100 * t["size"]),
+    }
+
+
+def entity_luck(trades: list[dict[str, Any]]) -> dict[str, Any]:
+    """How many entities are profitable at all, and without their single best trade."""
+    per: dict[str, list[float]] = defaultdict(list)
+    for t in trades:
+        per[t["entity"]].append(t["pnl"])
+    totals = sorted((sum(v) for v in per.values()), reverse=True)
+    return {
+        "entities": len(per),
+        "positive": sum(sum(v) > 0 for v in per.values()),
+        "positive_ex_best": sum(_ex_best(v) > 0 for v in per.values()),
+        "total_ex_top5_entities": sum(totals[5:]),
+    }
+
+
+def clones(trades: list[dict[str, Any]], min_entries: int = 10, share: float = 0.7) -> list[Any]:
+    """Entity pairs that enter the same asset at the same time on >= `share` of the smaller
+    one's trades: probably one operator, so their trades are one bet counted twice."""
+    sets: dict[str, set[tuple[Any, Any]]] = defaultdict(set)
+    for t in trades:
+        sets[t["entity"]].add((t["asset"], t["time"]))
+    ents = [e for e, s in sets.items() if len(s) >= min_entries]
+    out = []
+    for i, a in enumerate(ents):
+        for b in ents[i + 1:]:
+            inter = len(sets[a] & sets[b])
+            frac = inter / min(len(sets[a]), len(sets[b]))
+            if frac >= share:
+                out.append({"a": a, "b": b, "shared_entries": inter, "share": frac})
+    return sorted(out, key=lambda x: -x["share"])
+
+
+def cost_sensitivity(trades: list[dict[str, Any]]) -> dict[str, Any]:
+    """Total PnL if every round trip cost an extra x% of size; and the break-even x."""
+    sized = [t for t in trades if t.get("size")]
+    deployed = sum(t["size"] for t in sized)
+    total = sum(t["pnl"] for t in sized)
+    return {
+        "break_even_extra_cost": total / deployed if deployed else None,
+        "extra": {str(x): total - deployed * x / 100 for x in (1, 3, 5)},
+    }
+
+
+def sequence(trades: list[dict[str, Any]], period: float, loss_limit: float | None) -> dict[str, Any]:
+    """Path statistics in entry order. PnL is booked at entry time (exit times are usually not
+    in a trade log), so drawdown and the loss-limit simulation are approximations."""
+    tr = sorted(trades, key=lambda x: x["time"])
+    t0 = tr[0]["time"]  # days are counted from the first trade
+    eq = peak = dd = 0.0
+    streak = longest = 0
+    days: dict[int, float] = defaultdict(float)
+    for t in tr:
+        eq += t["pnl"]
+        peak = max(peak, eq)
+        dd = min(dd, eq - peak)
+        streak = streak + 1 if t["pnl"] <= 0 else 0
+        longest = max(longest, streak)
+        days[int((t["time"] - t0) // period)] += t["pnl"]
+    out: dict[str, Any] = {
+        "max_drawdown": dd,
+        "longest_losing_streak": longest,
+        "days": len(days),
+        "days_positive": sum(v > 0 for v in days.values()),
+        "median_day": statistics.median(days.values()),
+    }
+    if loss_limit is not None:
+        day_pnl: dict[int, float] = defaultdict(float)
+        halted: set[int] = set()
+        taken, total = 0, 0.0
+        top = {id(t) for t in sorted(tr, key=lambda x: x["pnl"], reverse=True)[
+            : max(1, math.ceil(len(tr) * 0.01))]}
+        top_caught = 0
+        for t in tr:
+            d = int((t["time"] - t0) // period)
+            if d in halted:
+                continue
+            taken += 1
+            total += t["pnl"]
+            top_caught += id(t) in top
+            day_pnl[d] += t["pnl"]
+            if day_pnl[d] <= -loss_limit:
+                halted.add(d)
+        out["loss_limit"] = {
+            "limit": loss_limit, "trades_taken": taken, "total": total,
+            "days_halted": len(halted), "top1pct_caught": top_caught, "top1pct_n": len(top),
+        }
+    return out
+
+
+def first_entry_per_asset(trades: list[dict[str, Any]]) -> dict[str, Any]:
+    """Total if only the first entry into each asset is taken (one position per token)."""
+    first: dict[str, dict[str, Any]] = {}
+    for t in sorted(trades, key=lambda x: x.get("time", 0)):
+        first.setdefault(t["asset"], t)
+    return {"trades": len(first), "total": sum(t["pnl"] for t in first.values()),
+            "rows_in_multi_entry_assets": len(trades) - len(first)}
+
+
+
 # --------------------------------------------------------------------------- report
 
 
@@ -238,6 +366,18 @@ def pct(v: Any) -> str:
 
 def build(trades: list[dict[str, Any]], args: argparse.Namespace) -> dict[str, Any]:
     res: dict[str, Any] = {"overall": basic(trades), "tail": tail(trades)}
+    res["sanity"] = sanity(trades)
+    res["top_trades"] = top_trades(trades)
+    if any(t.get("size") for t in trades):
+        res["costs"] = cost_sensitivity(trades)
+    if args.entity:
+        res["entity_luck"] = entity_luck(trades)
+    if args.asset:
+        res["first_entry"] = first_entry_per_asset(trades)
+    if args.entity and args.asset and args.time:
+        res["clones"] = clones(trades)
+    if args.time:
+        res["sequence"] = sequence(trades, args.period, args.daily_loss_limit)
     if args.asset:
         res["assets"] = asset_concentration(trades)
         res["bootstrap"] = bootstrap(list(by_asset(trades).values()), args.boot, args.seed)
@@ -289,6 +429,47 @@ def flags(res: dict[str, Any]) -> list[str]:
         out.append(
             f"LOTTERY PROFILE: median trade {pct(o['median_pct'])} while the total is positive;"
             " check drawdown and whether risk limits would halt trading before winners arrive."
+        )
+    sn = res.get("sanity", {})
+    if sn.get("return_over_10000pct"):
+        out.append(
+            f"SUSPECT TRADES: {sn['return_over_10000pct']} trade(s) above +10,000%. Treat as a"
+            " data error (wrong pool, decimals) until checked on a block explorer."
+        )
+    if sn.get("duplicate_rows"):
+        out.append(f"DUPLICATES: {sn['duplicate_rows']} exact duplicate rows.")
+    if sn.get("loss_over_105pct"):
+        out.append(f"IMPOSSIBLE LOSSES: {sn['loss_over_105pct']} trade(s) lose more than 105% of their size.")
+    el = res.get("entity_luck")
+    if el and el["positive_ex_best"] < el["entities"] / 2 and o.get("total", 0) > 0:
+        out.append(
+            f"ENTITY LUCK: {el['positive']} of {el['entities']} entities are positive, only"
+            f" {el['positive_ex_best']} without their single best trade."
+        )
+    if res.get("clones"):
+        out.append(
+            f"CLONED ENTITIES: {len(res['clones'])} entity pair(s) share >= 70% of their entries;"
+            " they are probably one operator, so the sample is smaller than it looks."
+        )
+    fe = res.get("first_entry")
+    if fe and o.get("total", 0) > 0 and fe["total"] <= 0:
+        out.append(
+            f"STACKED ENTRIES: taking only the first entry per asset gives {fmt(fe['total'])}"
+            f" ({fe['trades']} trades); the profit comes from repeat entries into the same assets."
+        )
+    cs = res.get("costs")
+    if cs and cs["break_even_extra_cost"] is not None and 0 < cs["break_even_extra_cost"] < 0.03:
+        out.append(
+            f"THIN MARGIN: an extra {pct(cs['break_even_extra_cost'])} of round-trip cost"
+            " (latency slip, failed sends, worse fills) erases the profit."
+        )
+    sq = res.get("sequence", {})
+    ll = sq.get("loss_limit")
+    if ll and o.get("total", 0) > 0 and ll["total"] < o["total"] * 0.5:
+        out.append(
+            f"RISK LIMIT KILLS IT: with a {fmt(ll['limit'])} daily loss limit the total is"
+            f" {fmt(ll['total'])} ({ll['days_halted']} of {sq['days']} days halted,"
+            f" {ll['top1pct_caught']} of {ll['top1pct_n']} top trades caught)."
         )
     s = res.get("split")
     if s:
@@ -343,12 +524,51 @@ def markdown(res: dict[str, Any]) -> str:
     L.append(f"- best trade {fmt(t['best_trade'])} ({pct(t['best_trade_share'])} of total)")
     L.append(f"- without best trade: {fmt(t['ex_best'])}; without top 10: {fmt(t['ex_top10'])};"
              f" without top 1% ({t['top1pct_k']} trades): {fmt(t['ex_top1pct'])}")
+    if res.get("top_trades"):
+        L += ["", "| top trades | PnL | return | asset | entity |", "|---|---|---|---|---|"]
+        for i, x in enumerate(res["top_trades"], 1):
+            L.append(f"| {i} | {fmt(x['pnl'])} | {pct(x['return'])} | {x.get('asset') or ''} |"
+                     f" {x.get('entity') or ''} |")
+    sn = res["sanity"]
+    L += ["", "## Data sanity", "",
+          f"- duplicate rows: {sn['duplicate_rows']}; losses over 105% of size: {sn['loss_over_105pct']};"
+          f" trades above +10,000%: {sn['return_over_10000pct']}"]
     a = res.get("assets")
     if a:
         L += ["", "## Asset concentration", ""]
         L.append(f"- assets: {a['assets']}; profitable: {pct(a['pct_assets_profitable'])}")
         L.append(f"- without best asset: {fmt(a['ex_best_asset'])}; best 5:"
                  f" {fmt(a['ex_best_5_assets'])}; best 10: {fmt(a['ex_best_10_assets'])}")
+    fe = res.get("first_entry")
+    if fe:
+        L.append(f"- first entry per asset only: {fmt(fe['total'])} on {fe['trades']} trades"
+                 f" ({fe['rows_in_multi_entry_assets']} rows are repeat entries)")
+    el = res.get("entity_luck")
+    if el:
+        L += ["", "## Entities", "",
+              f"- {el['positive']} of {el['entities']} positive; {el['positive_ex_best']} positive"
+              f" without their best trade; total without the top 5 entities:"
+              f" {fmt(el['total_ex_top5_entities'])}"]
+        for c in (res.get("clones") or [])[:10]:
+            L.append(f"- possible same operator: {c['a']} / {c['b']} share {pct(c['share'])} of"
+                     f" entries ({c['shared_entries']})")
+    cs = res.get("costs")
+    if cs:
+        L += ["", "## Cost sensitivity (extra cost per round trip, % of size)", "",
+              f"- break-even extra cost: {pct(cs['break_even_extra_cost'])}",
+              "- total at +1% / +3% / +5%: " + " / ".join(fmt(cs["extra"][k]) for k in ("1", "3", "5"))]
+    sq = res.get("sequence")
+    if sq:
+        L += ["", "## Path (entry order; PnL booked at entry, so approximate)", "",
+              f"- max drawdown {fmt(sq['max_drawdown'])}; longest losing streak"
+              f" {sq['longest_losing_streak']} trades",
+              f"- days: {sq['days_positive']} of {sq['days']} positive; median day"
+              f" {fmt(sq['median_day'])}"]
+        ll = sq.get("loss_limit")
+        if ll:
+            L.append(f"- with a {fmt(ll['limit'])} daily loss limit: {ll['trades_taken']} trades,"
+                     f" total {fmt(ll['total'])}, {ll['days_halted']} days halted,"
+                     f" {ll['top1pct_caught']} of {ll['top1pct_n']} top-1% trades caught")
     bs = res.get("bootstrap")
     if bs:
         L += ["", f"## Bootstrap ({bs['unit']}-level, {bs['n_boot']} resamples)", ""]
@@ -396,6 +616,10 @@ def main() -> None:
     ap.add_argument("--boot", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=41)
     ap.add_argument("--min-entity-trades", type=int, default=10)
+    ap.add_argument("--period", type=float, default=86400.0,
+                    help="length of one day in --time units (default 86400; Solana slots: 216000)")
+    ap.add_argument("--daily-loss-limit", type=float,
+                    help="simulate halting for the rest of the day at this loss")
     ap.add_argument("--json", help="also write the full result as JSON")
     args = ap.parse_args()
     trades = load(args)

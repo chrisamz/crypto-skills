@@ -20,8 +20,10 @@ It ships a standard-library Python script that runs the quantitative checks on a
 
 ```bash
 python scripts/audit_trades.py trades.csv --pnl pnl_usd --size size_usd \
-    --asset mint --entity wallet --time entry_time
+    --asset mint --entity wallet --time entry_time --daily-loss-limit 60
 ```
+
+It reports what's left without the top 1% of trades and the best few tokens, a bootstrap that resamples whole tokens, first-half vs second-half results, a pick-on-A / trade-on-B test for wallets, cost sensitivity, drawdown, a daily-loss-limit simulation, and wallets that look like the same operator.
 
 The checks come from a real Solana copy-trading project in which a +10% backtest turned out to have no out-of-sample edge. The worked example is in `references/case-study.md`.
 

@@ -23,19 +23,26 @@ If only a summary or screenshot exists, do step 3 qualitatively and make the mis
 
 ```bash
 python <skill-dir>/scripts/audit_trades.py trades.csv --pnl <col> \
-    [--size <col>] [--asset <col>] [--entity <col>] [--time <col>] [--json out.json]
+    [--size <col>] [--asset <col>] [--entity <col>] [--time <col>] \
+    [--period <day length in time units>] [--daily-loss-limit <amount>] [--json out.json]
 ```
 
-Standard library only; no install needed. Pass every optional column that exists, since each one enables a check:
+Standard library only; no install needed. Pass every optional column that exists, since each one enables checks:
 
-| column | enables |
+| option | enables |
 |---|---|
-| `--size` | return per $ deployed, median trade % |
-| `--asset` | asset concentration, asset-level bootstrap |
-| `--time` | first/second-half split (ISO dates, unix seconds or slots) |
+| `--size` | return per $ deployed, median trade %, cost sensitivity (extra round-trip cost that erases the profit), trades above +10,000% |
+| `--asset` | asset concentration, asset-level bootstrap, "first entry per asset only" total |
+| `--entity` | per-entity luck check (how many stay positive without their best trade) |
+| `--time` | first/second-half split, max drawdown, losing streak, per-day stats. Accepts ISO dates, unix seconds, or block/slot numbers |
 | `--entity` + `--time` | selection test: pick wallets on the first half, trade them on the second |
+| `--entity` + `--asset` + `--time` | cloned-entity detection (wallets making the same entries are one operator) |
+| `--period` | length of a "day" in `--time` units. Default 86400 (seconds). Use 216000 for Solana slots |
+| `--daily-loss-limit` | simulates halting for the rest of the day at that loss. Ask the user for their real limit; if they have none, try 3× the position size as an illustration and say so |
 
-Read the output's flags, but interpret them; don't just paste them. If the data needs reshaping first (per-fill rows into positions, PnL from entry/exit prices), do that in a small script and say what you did. If PnL is gross, note that costs are missing and estimate them (step 3, costs).
+The script covers the standard checks, so don't re-implement them. Write extra code only for something specific to this data (e.g. per-hour effects, a position cap that needs exit times).
+
+Read the output's flags, but interpret them; don't just paste them. A flag is a prompt to look, e.g. "SUSPECT TRADES" means open that trade on a block explorer or ask the user to. If the data needs reshaping first (per-fill rows into positions, PnL from entry/exit prices), do that in a small script and say what you did. If PnL is gross, note that costs are missing and estimate them (step 3, costs).
 
 ### 3. Check the traps
 

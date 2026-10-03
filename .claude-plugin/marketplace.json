@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Claude skills for crypto research: honest backtests, on-chain fill math, wallet analysis.",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "plugins": [
     {
       "name": "crypto-backtest-audit",
       "source": "./plugins/crypto-backtest-audit",
       "description": "Audit crypto/memecoin backtests, copy-trading results and wallet-performance claims for look-ahead, survivorship, tail dependence, unrealistic fills and missing costs.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "finance",
       "keywords": [
         "crypto",
