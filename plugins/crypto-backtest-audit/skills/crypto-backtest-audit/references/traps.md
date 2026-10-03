@@ -69,7 +69,7 @@ Contents
 **Typical forms**
 - A copy trade filled at the leader's own fill price. A copier is always later.
 - Fills at candle open/close, or at "the price at signal time" from an aggregator, instead of the pool state when the transaction lands.
-- No price impact for your size in a thin pool, which matters most exactly where memecoins move fastest ($5k–$50k market cap).
+- No price impact for your size in a thin pool, which matters most exactly where memecoins move fastest (5k–50k USD market cap).
 - A sell priced at the last trade even though the pool was drained (rug), so nobody could actually sell.
 
 **How to detect**
@@ -102,7 +102,7 @@ Rule of thumb: a single trade above ~+10,000% is a data error until shown otherw
 
 ## 8. Practical tradability
 
-- **Risk limits vs. the payoff profile.** A strategy with a −14% median trade and a $60 daily loss limit at $20 per position halts after a handful of losers. In live trading it would rarely be running when the runner arrives, so the backtest's best trades are exactly the ones you'd miss.
+- **Risk limits vs. the payoff profile.** A strategy with a −14% median trade and a 60 USD daily loss limit at 20 USD per position halts after a handful of losers. In live trading it would rarely be running when the runner arrives, so the backtest's best trades are exactly the ones you'd miss.
 - **Concurrency.** The backtest may assume 100 simultaneous positions while the account allows 15.
 - **Capacity.** Does the edge survive at 5× the size? In thin pools it usually doesn't.
 - **Crowding.** Public wallets are copy-botted within seconds, and some sell into their copiers. Measure the price move in the 30–60 s after the leader's buy. If it's large, the copiers are your competition.

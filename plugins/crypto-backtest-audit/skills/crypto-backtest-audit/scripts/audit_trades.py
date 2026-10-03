@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Quantitative audit of a trade list: is the edge real, or a few lucky trades?
 
 Standard library only (Python 3.9+). Input: a CSV with one row per trade/position.
@@ -8,7 +7,7 @@ Standard library only (Python 3.9+). Input: a CSV with one row per trade/positio
 
 Columns (names configurable):
   --pnl     net PnL per trade, in quote currency (required)
-  --size    capital deployed per trade (optional; enables return-per-$ and % medians)
+  --size    capital deployed per trade (optional; enables return per dollar and % medians)
   --asset   token/mint/symbol (optional; enables asset concentration + asset bootstrap)
   --entity  wallet/leader/strategy the trade was copied from (optional; enables the
             selection test: pick entities on the first half, trade them on the second)
@@ -36,6 +35,7 @@ import statistics
 import sys
 from collections import defaultdict
 from datetime import datetime
+from collections.abc import Iterable
 from typing import Any
 
 
@@ -209,7 +209,8 @@ def selection_test(
         pb[t["entity"]].append(t)
     picked = {e for e, p in pa.items() if len(p) >= min_trades and _ex_best(p) > 0}
 
-    def summarize(ents: set[str]) -> dict[str, Any]:
+    def summarize(ents: Iterable[str]) -> dict[str, Any]:
+        ents = list(ents)
         tr = [t for e in ents for t in pb.get(e, [])]
         return {"entities": len([e for e in ents if e in pb]), **basic(tr)} if tr else {
             "entities": 0, "n": 0}
@@ -268,15 +269,15 @@ def entity_luck(trades: list[dict[str, Any]]) -> dict[str, Any]:
 def clones(trades: list[dict[str, Any]], min_entries: int = 10, share: float = 0.7) -> list[Any]:
     """Entity pairs that enter the same asset at the same time on >= `share` of the smaller
     one's trades: probably one operator, so their trades are one bet counted twice."""
-    sets: dict[str, set[tuple[Any, Any]]] = defaultdict(set)
+    entries: dict[str, dict[tuple[Any, Any], bool]] = defaultdict(dict)
     for t in trades:
-        sets[t["entity"]].add((t["asset"], t["time"]))
-    ents = [e for e, s in sets.items() if len(s) >= min_entries]
+        entries[t["entity"]][(t["asset"], t["time"])] = True
+    ents = [e for e, s in entries.items() if len(s) >= min_entries]
     out = []
     for i, a in enumerate(ents):
         for b in ents[i + 1:]:
-            inter = len(sets[a] & sets[b])
-            frac = inter / min(len(sets[a]), len(sets[b]))
+            inter = len(entries[a].keys() & entries[b].keys())
+            frac = inter / min(len(entries[a]), len(entries[b]))
             if frac >= share:
                 out.append({"a": a, "b": b, "shared_entries": inter, "share": frac})
     return sorted(out, key=lambda x: -x["share"])
@@ -317,7 +318,7 @@ def sequence(trades: list[dict[str, Any]], period: float, loss_limit: float | No
     }
     if loss_limit is not None:
         day_pnl: dict[int, float] = defaultdict(float)
-        halted: set[int] = set()
+        halted: dict[int, bool] = {}
         taken, total = 0, 0.0
         top = {id(t) for t in sorted(tr, key=lambda x: x["pnl"], reverse=True)[
             : max(1, math.ceil(len(tr) * 0.01))]}
@@ -331,7 +332,7 @@ def sequence(trades: list[dict[str, Any]], period: float, loss_limit: float | No
             top_caught += id(t) in top
             day_pnl[d] += t["pnl"]
             if day_pnl[d] <= -loss_limit:
-                halted.add(d)
+                halted[d] = True
         out["loss_limit"] = {
             "limit": loss_limit, "trades_taken": taken, "total": total,
             "days_halted": len(halted), "top1pct_caught": top_caught, "top1pct_n": len(top),
@@ -517,7 +518,7 @@ def markdown(res: dict[str, Any]) -> str:
     L.append(f"- total PnL: {fmt(o.get('total'))}; mean {fmt(o.get('mean'))}; median"
              f" {fmt(o.get('median'))}")
     if "deployed" in o:
-        L.append(f"- deployed: {fmt(o['deployed'])}; return per $ deployed:"
+        L.append(f"- deployed: {fmt(o['deployed'])}; return per dollar deployed:"
                  f" {pct(o['return_per_dollar'])}; median trade {pct(o['median_pct'])}")
     L.append(f"- win rate {pct(o.get('win_rate'))}; profit factor {fmt(o.get('profit_factor'))}")
     L += ["", "## Tail dependence", ""]
@@ -577,7 +578,7 @@ def markdown(res: dict[str, Any]) -> str:
     s = res.get("split")
     if s:
         L += ["", "## Time split at the median entry (A = first half, B = second)", "",
-              "| half | n | total | return/$ | median trade | win rate | total ex top 1% |",
+              "| half | n | total | return per dollar | median trade | win rate | total ex top 1% |",
               "|---|---|---|---|---|---|---|"]
         for h in ("A", "B"):
             x = s[h]
@@ -589,7 +590,7 @@ def markdown(res: dict[str, Any]) -> str:
         L += ["", "## Selection test (pick entities on A, trade them on B)", "",
               f"Picked = >= {sel['min_trades_in_a']} trades in A and PnL excluding their best"
               " trade > 0 in A.", "",
-              "| group | entities | trades in B | total B | mean/trade B | return/$ B |",
+              "| group | entities | trades in B | total B | mean/trade B | return per dollar B |",
               "|---|---|---|---|---|---|"]
         for name in ("picked", "not_picked"):
             x = sel[name]

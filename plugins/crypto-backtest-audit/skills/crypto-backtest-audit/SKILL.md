@@ -31,7 +31,7 @@ Standard library only; no install needed. Pass every optional column that exists
 
 | option | enables |
 |---|---|
-| `--size` | return per $ deployed, median trade %, cost sensitivity (extra round-trip cost that erases the profit), trades above +10,000% |
+| `--size` | return per dollar deployed, median trade %, cost sensitivity (extra round-trip cost that erases the profit), trades above +10,000% |
 | `--asset` | asset concentration, asset-level bootstrap, "first entry per asset only" total |
 | `--entity` | per-entity luck check (how many stay positive without their best trade) |
 | `--time` | first/second-half split, max drawdown, losing streak, per-day stats. Accepts ISO dates, unix seconds, or block/slot numbers |
@@ -52,7 +52,7 @@ Go through each category. For the details, detection queries and fixes, read `re
 2. **Survivorship.** Do hit rates count only tokens that still exist or only waves that happened? The denominator must be every attempt, including duds and rugs.
 3. **Tail dependence.** Does the result survive removing the top 1% of trades, the best 5 assets, and the single best trade? Memecoin returns are extremely fat-tailed, so a positive total is often just one runner.
 4. **Robustness.** Bootstrap by asset or entity, not by trade, because copies of one runner are correlated. Check P(total > 0) and p5. Check that both halves agree.
-5. **Fill realism.** Entries at the leader's fill price, or at a candle close, can't be had. Copying takes 1–3 s or more, and at $5k–$50k market cap the price can move 20–50% in that time. Fills should come from pool reserves at signal + latency.
+5. **Fill realism.** Entries at the leader's fill price, or at a candle close, can't be had. Copying takes 1–3 s or more, and at 5k–50k USD market cap the price can move 20–50% in that time. Fills should come from pool reserves at signal + latency.
 6. **Costs.** Venue/LP fees (pump.fun curve ~0.95–1.25% per side, varying per token; PumpSwap ~0.25%; aggregator fees), priority fees, tips, our own price impact, and failed transactions. Many "profitable" scalps are pure fee donations.
 7. **Data errors.** Several pools per token (dust pools priced 1000× off), wrong decimals or supply, wicks in thin candles, stablecoin swaps counted as trades, duplicate rows. A single impossible trade (+50,000%) is a data bug until proven otherwise.
 8. **Practical tradability.** Would the risk rules (max open positions, daily loss limit) have halted trading before the runners arrived? Could the size actually be absorbed, and sold?

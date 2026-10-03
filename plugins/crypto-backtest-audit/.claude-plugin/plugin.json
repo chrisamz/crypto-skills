@@ -1,7 +1,7 @@
 {
   "name": "crypto-backtest-audit",
   "description": "Audit crypto/memecoin backtests, copy-trading results and wallet-performance claims for look-ahead, survivorship, tail dependence, unrealistic fills and missing costs.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": {
     "name": "chrisamz",
     "url": "https://github.com/chrisamz"
