@@ -30,6 +30,12 @@ python skills/crypto-backtest-audit/scripts/audit_trades.py trades.csv --pnl pnl
 
 The answer is a verdict (no evidence of edge / edge not robust / plausible, needs out-of-sample test / survives the checks), the numbers behind it, and what test would change it.
 
+## What it runs
+
+- One Python script, `skills/crypto-backtest-audit/scripts/audit_trades.py`, which Claude runs on your machine when you give it a trade CSV.
+- The script uses only the Python standard library. It reads the CSV you point it at and prints a report; with `--json` it also writes one result file where you tell it to.
+- It makes no network requests, reads no credentials, and has no hooks, MCP servers or background processes.
+
 ## Not investment advice
 
 This is an analysis tool. A passing audit means the evidence is consistent with an edge, not that you will make money.
