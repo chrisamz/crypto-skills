@@ -1,0 +1,21 @@
+{
+  "name": "crypto-backtest-audit",
+  "description": "Audit crypto/memecoin backtests, copy-trading results and wallet-performance claims for look-ahead, survivorship, tail dependence, unrealistic fills and missing costs.",
+  "version": "0.1.0",
+  "author": {
+    "name": "chrisamz",
+    "url": "https://github.com/chrisamz"
+  },
+  "license": "MIT",
+  "keywords": [
+    "crypto",
+    "backtest",
+    "trading",
+    "solana",
+    "memecoin",
+    "copy-trading",
+    "statistics"
+  ],
+  "homepage": "https://github.com/chrisamz/crypto-skills",
+  "repository": "https://github.com/chrisamz/crypto-skills"
+}
