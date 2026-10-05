@@ -20,6 +20,22 @@
         "copy-trading",
         "statistics"
       ]
+    },
+    {
+      "name": "solana-swap-explainer",
+      "source": "./plugins/solana-swap-explainer",
+      "description": "Explain any Solana swap transaction: real fill price, price impact, pump.fun and PumpSwap fees, priority fee, tips and bot fees, and the pool reserves it traded against.",
+      "category": "finance",
+      "tags": [
+        "solana",
+        "crypto",
+        "swap",
+        "pump.fun",
+        "pumpswap",
+        "memecoin",
+        "fees",
+        "transaction"
+      ]
     }
   ]
 }

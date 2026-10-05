@@ -27,20 +27,37 @@ It reports what's left without the top 1% of trades and the best few tokens, a b
 
 The checks come from a real Solana copy-trading project in which a +10% backtest turned out to have no out-of-sample edge. The worked example is in `references/case-study.md`.
 
+## solana-swap-explainer
+
+Give Claude a Solana transaction signature or its JSON and it accounts for every lamport of a swap:
+
+- **pump.fun bonding curve:** SOL into the curve, protocol and creator fees (the rates differ per token), reserves, price before and after, price impact.
+- **PumpSwap:** pool reserves, fill price, price impact, the fee rates the pool declared, and how far the fill fell short of a no-fee fill.
+- **Any venue:** network fee split into base and priority, exact rent, a list of who received SOL and tokens (pool, fee accounts, tips, a router taking a cut), and an all-in price against the pool price before the trade.
+
+The decoder works offline on a transaction file. A separate helper downloads a transaction from the RPC address you give it; there is no built-in endpoint.
+
+```bash
+python scripts/explain_swap.py examples/pumpfun_buy.json
+```
+
+Checked against recorded mainnet transactions: pump.fun fills reproduce to within 1 part in 10 million, PumpSwap fills to within 0.01%.
+
 ## Install (Claude Code)
 
 ```
 /plugin marketplace add chrisamz/crypto-skills
 /plugin install crypto-backtest-audit@crypto-skills
+/plugin install solana-swap-explainer@crypto-skills
 ```
 
 Then just ask, for example: "here's my bot's trade log, is the edge real?"
 
-To use it in claude.ai, upload the `plugins/crypto-backtest-audit/skills/crypto-backtest-audit` folder as a skill (zip it first).
+To use a skill in claude.ai, download its `.skill` file from the [releases page](https://github.com/chrisamz/crypto-skills/releases) and upload it under Settings, Skills.
 
 ## Privacy and support
 
-The plugin collects nothing and works offline: see [PRIVACY.md](plugins/crypto-backtest-audit/PRIVACY.md). For help or to report a problem, open an [issue](https://github.com/chrisamz/crypto-skills/issues).
+Neither plugin sends anything to the author. `crypto-backtest-audit` works fully offline; `solana-swap-explainer` only contacts the RPC you choose. See each plugin's `PRIVACY.md`. For help or to report a problem, open an [issue](https://github.com/chrisamz/crypto-skills/issues).
 
 ## Disclaimer
 
